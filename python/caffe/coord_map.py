@@ -1,3 +1,10 @@
+"""
+Determine coordinate mappings between layers to relate their spatial coordinates
+with one another. Coordinates are mapped from input-to-output (forward), but can
+be mapped output-to-input (backward) by the inverse mapping too.
+This helps crop and align feature maps among other uses.
+"""
+
 from __future__ import division
 import numpy as np
 from caffe import layers as L
@@ -9,6 +16,15 @@ PASS_THROUGH_LAYERS = ['AbsVal', 'BatchNorm', 'Bias', 'BNLL', 'Dropout',
 
 
 def conv_params(fn):
+    """
+    Extract the spatial parameters that determine the coordinate mapping:
+    kernel size, stride, padding, and dilation.
+
+    Implementation detail: Convolution, Deconvolution, and Im2col layers
+    define these in the convolution_param message, while Pooling has its
+    own fields in pooling_param. This method deals with these details to
+    extract canonical parameters.
+    """
     params = fn.params.get('convolution_param', fn.params)
     axis = params.get('axis', 1)
     ks = np.array(params['kernel_size'], ndmin=1)
@@ -22,10 +38,21 @@ def conv_params(fn):
 
 
 class UndefinedMapException(Exception):
+    """
+    Exception raised for layers that do not have a defined coordinate mapping.
+    """
     pass
 
 
 def coord_map(fn):
+    """
+    Define the coordinate mapping by its
+    - axis
+    - scale: output coord[i * scale] <- input_coord[i]
+    - shift: output coord[i] <- output_coord[i + shift]
+    s.t. the identity mapping, as for pointwise layers like ReLu, is defined by
+    (None, 1, 0) since it is independent of axis and does not transform coords.
+    """
     if fn.type_name in ['Convolution', 'Pooling', 'Im2col']:
         axis, stride, ks, pad = conv_params(fn)
         return axis, 1 / stride, (pad - (ks - 1) / 2) / stride
@@ -42,10 +69,18 @@ def coord_map(fn):
 
 
 class AxisMismatchException(Exception):
+    """
+    Exception raised for mappings with incompatible axes.
+    """
     pass
 
 
 def compose((ax1, a1, b1), (ax2, a2, b2)):
+    """
+    Compose a base coord map with scale a1, shift b1 with a further coord map
+    with scale a2, shift b2. The scales multiply and the further shift, b2,
+    is scaled by base coord scale a1.
+    """
     if ax1 is None:
         ax = ax2
     elif ax2 is None or ax1 == ax2:
@@ -56,10 +91,19 @@ def compose((ax1, a1, b1), (ax2, a2, b2)):
 
 
 def inverse((ax, a, b)):
+    """
+    Invert a coord map by de-scaling and un-shifting;
+    this gives the backward mapping for the gradient.
+    """
     return ax, 1 / a, -b / a
 
 
 def coord_map_from_to(top_from, top_to):
+    """
+    Determine the coordinate mapping betweeen a top (from) and a top (to).
+    Walk the graph to find a common ancestor while composing the coord maps for
+    from and to until they meet. As a last step the from map is inverted.
+    """
     # We need to find a common ancestor of top_from and top_to.
     # We'll assume that all ancestors are equivalent here (otherwise the graph
     # is an inconsistent state (which we could improve this to check for)).
@@ -97,6 +141,11 @@ def coord_map_from_to(top_from, top_to):
 
 
 def crop(top_from, top_to):
+    """
+    Define a Crop layer to crop a top (from) to another top (to) by
+    determining the coordinate mapping between the two and net spec'ing
+    the axis and shift parameters of the crop.
+    """
     ax, a, b = coord_map_from_to(top_from, top_to)
     assert (a == 1).all(), 'scale mismatch on crop (a = {})'.format(a)
     assert (b <= 0).all(), 'cannot crop negative offset (b = {})'.format(b)
