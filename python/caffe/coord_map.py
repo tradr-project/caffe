@@ -9,10 +9,10 @@ from __future__ import division
 import numpy as np
 from caffe import layers as L
 
-PASS_THROUGH_LAYERS = ['AbsVal', 'BatchNorm', 'Bias', 'BNLL', 'Dropout',
-                       'Eltwise', 'ELU', 'Log', 'LRN', 'Exp', 'MVN', 'Power',
-                       'ReLU', 'PReLU', 'Scale', 'Sigmoid', 'Split', 'TanH',
-                       'Threshold']
+PASS_THROUGH_LAYERS = ['AbsVal', 'BatchNorm', 'Bias', 'BNLL', 'Concat',
+                       'Dropout', 'Eltwise', 'ELU', 'Log', 'LRN', 'Exp', 'MVN',
+                       'Power', 'ReLU', 'PReLU', 'Scale', 'Sigmoid', 'Split',
+                       'TanH', 'Threshold']
 
 
 def conv_params(fn):
