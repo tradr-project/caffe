@@ -99,9 +99,9 @@ def coord_map_from_to(top_from, top_to):
 def crop(top_from, top_to):
     ax, a, b = coord_map_from_to(top_from, top_to)
     assert (a == 1).all(), 'scale mismatch on crop (a = {})'.format(a)
-    assert (b <= 0).all(), 'cannot crop negative width (b = {})'.format(b)
+    assert (b <= 0).all(), 'cannot crop negative offset (b = {})'.format(b)
     assert (np.round(b) == b).all(),
-    'cannot crop noninteger width (b = {})'.format(b)
+    'cannot crop noninteger offset (b = {})'.format(b)
     return L.Crop(top_from, top_to,
                   crop_param=dict(axis=ax,
-                                  crop=list(-np.round(b).astype(int))))
+                                  offset=list(-np.round(b).astype(int))))
